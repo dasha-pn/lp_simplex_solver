@@ -22,49 +22,35 @@ class Solver:
         self.target = target_func
 
     def _mat_vec_mult(self, M: List[List[float]], v: List[float]) -> List[float]:
-        """
-        Multiply matrix by column vector (M * v)
-        """
+        """Multiply matrix by column vector (M * v)"""
         m = len(M)
         n = len(v)
         res = [0.0] * m
         for i in range(m):
             res[i] = sum(M[i][j] * v[j] for j in range(n))
-
         return res
 
     def _vec_mat_mult(self, v: List[float], M: List[List[float]]) -> List[float]:
-        """
-        Multiply row vector by matrix (v^T * M)
-        """
+        """Multiply row vector by matrix (v^T * M)"""
         if not M:
             return []
-
         m = len(v)
         cols = len(M[0])
         res = [0.0] * cols
-
         for j in range(cols):
             res[j] = sum(v[i] * M[i][j] for i in range(m))
-
         return res
 
     def _get_columns(self, A: List[List[float]], indices: List[int]) -> List[List[float]]:
-        """
-        Get new matrix from columns of A
-        """
+        """Get new matrix from columns of A"""
         return [[row[j] for j in indices] for row in A]
 
     def _get_column(self, A: List[List[float]], j: int) -> List[float]:
-        """
-        Get matrix column
-        """
+        """Get matrix column"""
         return [row[j] for row in A]
 
     def _invert_matrix(self, M: List[List[float]]) -> List[List[float]]:
-        """
-        Find matrix inverse using elementary row operations
-        """
+        """Find matrix inverse using elementary row operations"""
         m = len(M)
         aug = [row[:] + [1.0 if i == j else 0.0 for j in range(m)] for i, row in enumerate(M)]
         
@@ -198,6 +184,8 @@ class Solver:
         return status
 
     def _run_simplex_loop(self, c: List[float], A: List[List[float]], b: List[float], B: List[int], N: List[int], max_iters: int, EPS: float):
+        degenerate_iters = 0
+
         for _ in range(max_iters):
             B_mat = self._get_columns(A, B)
             B_inv = self._invert_matrix(B_mat)
@@ -211,15 +199,29 @@ class Solver:
             c_N = [c[i] for i in N]
             c_bar_N = [c_N[i] - y_N[i] for i in range(len(N))]
 
-            max_c_bar = -float("inf")
-            j_entering_N_idx = -1
-            for idx, val in enumerate(c_bar_N):
-                if val > max_c_bar:
-                    max_c_bar = val
-                    j_entering_N_idx = idx
+            use_blands_rule = degenerate_iters > 10
 
-            if max_c_bar <= EPS:
-                return LpStatus.OPTIMAL, B, N
+            j_entering_N_idx = -1
+            
+            if use_blands_rule:
+                min_original_index = float("inf")
+                for idx, val in enumerate(c_bar_N):
+                    if val > EPS:
+                        original_var_idx = N[idx]
+                        if original_var_idx < min_original_index:
+                            min_original_index = original_var_idx
+                            j_entering_N_idx = idx
+                if j_entering_N_idx == -1:
+                    return LpStatus.OPTIMAL, B, N
+            else:
+                max_c_bar = -float("inf")
+                for idx, val in enumerate(c_bar_N):
+                    if val > max_c_bar:
+                        max_c_bar = val
+                        j_entering_N_idx = idx
+                
+                if max_c_bar <= EPS:
+                    return LpStatus.OPTIMAL, B, N
 
             j = N[j_entering_N_idx]
             A_j = self._get_column(A, j)
@@ -231,13 +233,32 @@ class Solver:
             x_B = self._mat_vec_mult(B_inv, b)
             min_ratio = float("inf")
             leaving_B_idx = -1
+            
+            if use_blands_rule:
+                min_leaving_original_index = float("inf")
+                for i in range(len(B)):
+                    if d[i] > EPS:
+                        ratio = x_B[i] / d[i]
+                        if ratio < min_ratio - EPS:
+                            min_ratio = ratio
+                            leaving_B_idx = i
+                            min_leaving_original_index = B[i]
+                        elif abs(ratio - min_ratio) <= EPS:
+                            if B[i] < min_leaving_original_index:
+                                leaving_B_idx = i
+                                min_leaving_original_index = B[i]
+            else:
+                for i in range(len(B)):
+                    if d[i] > EPS:
+                        ratio = x_B[i] / d[i]
+                        if ratio < min_ratio:
+                            min_ratio = ratio
+                            leaving_B_idx = i
 
-            for i in range(len(B)):
-                if d[i] > EPS:
-                    ratio = x_B[i] / d[i]
-                    if ratio < min_ratio:
-                        min_ratio = ratio
-                        leaving_B_idx = i
+            if min_ratio <= EPS:
+                degenerate_iters += 1
+            else:
+                degenerate_iters = 0
 
             B[leaving_B_idx], N[j_entering_N_idx] = N[j_entering_N_idx], B[leaving_B_idx]
 
