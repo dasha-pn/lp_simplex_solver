@@ -1,6 +1,5 @@
 import math
 
-import pytest
 from scipy.optimize import linprog
 
 from solver import Solver
@@ -20,7 +19,6 @@ def scipy_status_to_lp_status(result) -> LpStatus:
     """
     Map scipy.optimize.linprog status/result to the project's LpStatus.
     """
-
     if result.success:
         return LpStatus.OPTIMAL
 
@@ -31,7 +29,9 @@ def scipy_status_to_lp_status(result) -> LpStatus:
     if result.status == 3:
         return LpStatus.UNBOUNDED
 
-    raise AssertionError(f"Unexpected SciPy status: {result.status}, message: {result.message}")
+    raise AssertionError(
+        f"Unexpected SciPy status: {result.status}, message: {result.message}"
+    )
 
 
 def build_and_solve_our_solver(
@@ -40,12 +40,13 @@ def build_and_solve_our_solver(
     objective: list[float],
     target_func: LpFunc,
     max_iters: int = 500,
-) -> tuple[LpStatus, list[float], float]:
+) -> tuple[LpStatus, list[float] | None, float | None]:
     """
-    Build and solve the LP using our solver, 
-    returning status, variable values, and objective value.
-    """
+    Build and solve the LP using our solver.
 
+    Variable values and objective value are returned only for OPTIMAL status,
+    because getter behavior for other statuses may be implementation-specific.
+    """
     solver = Solver(vars_cnt=vars_cnt)
 
     for coefs, rhs, sign in constraints:
@@ -54,10 +55,12 @@ def build_and_solve_our_solver(
     solver.set_objective(objective, target_func)
     status = solver.solve(max_iters=max_iters)
 
-    values = [solver.get_var_value(i) for i in range(vars_cnt)]
-    objective_value = solver.get_objective_value()
+    if status == LpStatus.OPTIMAL:
+        values = [solver.get_var_value(i) for i in range(vars_cnt)]
+        objective_value = solver.get_objective_value()
+        return status, values, objective_value
 
-    return status, values, objective_value
+    return status, None, None
 
 
 def solve_with_scipy(
@@ -65,12 +68,11 @@ def solve_with_scipy(
     constraints: list[tuple[list[float], float, LpSign]],
     objective: list[float],
     target_func: LpFunc,
-):
+) -> tuple[LpStatus, list[float] | None, float | None]:
     """
     Convert the project LP representation into scipy.optimize.linprog format.
     Assumes all variables are nonnegative.
     """
-
     A_ub = []
     b_ub = []
     A_eq = []
@@ -110,11 +112,9 @@ def solve_with_scipy(
         objective_value = float(result.fun)
         if target_func == LpFunc.MAXIMIZE:
             objective_value = -objective_value
-    else:
-        values = [0.0] * vars_cnt
-        objective_value = 0.0
+        return status, values, objective_value
 
-    return status, values, objective_value
+    return status, None, None
 
 
 def compare_with_scipy(
@@ -123,10 +123,15 @@ def compare_with_scipy(
     objective: list[float],
     target_func: LpFunc,
     max_iters: int = 500,
-    compare_vars: bool = True,
+    compare_vars: bool = False,
 ) -> None:
-    """Compare our solver's results with SciPy's linprog."""
+    """
+    Compare our solver's results with SciPy's linprog.
 
+    By default, compare only status and objective value. Variable-by-variable
+    comparison is enabled only for cases where the optimal solution is known to
+    be unique.
+    """
     our_status, our_values, our_obj = build_and_solve_our_solver(
         vars_cnt, constraints, objective, target_func, max_iters=max_iters
     )
@@ -139,9 +144,13 @@ def compare_with_scipy(
     )
 
     if our_status == LpStatus.OPTIMAL:
+        assert our_obj is not None
+        assert scipy_obj is not None
         assert_close(our_obj, scipy_obj)
 
         if compare_vars:
+            assert our_values is not None
+            assert scipy_values is not None
             for i in range(vars_cnt):
                 assert_close(our_values[i], scipy_values[i])
 
@@ -157,7 +166,6 @@ def test_compare_scipy_production_planning() -> None:
         y <= 3
         x, y >= 0
     """
-
     constraints = [
         ([1, 1], 4, LpSign.LESS_OR_EQUAL),
         ([1, 0], 2, LpSign.LESS_OR_EQUAL),
@@ -170,6 +178,7 @@ def test_compare_scipy_production_planning() -> None:
         constraints=constraints,
         objective=objective,
         target_func=LpFunc.MAXIMIZE,
+        compare_vars=True,
     )
 
 
@@ -182,7 +191,6 @@ def test_compare_scipy_equality_minimization() -> None:
         x + y = 5
         x, y >= 0
     """
-
     constraints = [
         ([1, 1], 5, LpSign.EQUAL),
     ]
@@ -193,6 +201,7 @@ def test_compare_scipy_equality_minimization() -> None:
         constraints=constraints,
         objective=objective,
         target_func=LpFunc.MINIMIZE,
+        compare_vars=True,
     )
 
 
@@ -206,7 +215,6 @@ def test_compare_scipy_greater_or_equal_diet_problem() -> None:
         x + 3y >= 9
         x, y >= 0
     """
-
     constraints = [
         ([2, 1], 8, LpSign.GREATER_OR_EQUAL),
         ([1, 3], 9, LpSign.GREATER_OR_EQUAL),
@@ -218,6 +226,7 @@ def test_compare_scipy_greater_or_equal_diet_problem() -> None:
         constraints=constraints,
         objective=objective,
         target_func=LpFunc.MINIMIZE,
+        compare_vars=True,
     )
 
 
@@ -226,7 +235,6 @@ def test_compare_scipy_infeasible_problem() -> None:
     x <= 1
     x >= 3
     """
-
     constraints = [
         ([1], 1, LpSign.LESS_OR_EQUAL),
         ([1], 3, LpSign.GREATER_OR_EQUAL),
@@ -238,7 +246,6 @@ def test_compare_scipy_infeasible_problem() -> None:
         constraints=constraints,
         objective=objective,
         target_func=LpFunc.MAXIMIZE,
-        compare_vars=False,
     )
 
 
@@ -250,7 +257,6 @@ def test_compare_scipy_unbounded_problem() -> None:
     Subject to:
         x >= 0
     """
-
     constraints = [
         ([1], 0, LpSign.GREATER_OR_EQUAL),
     ]
@@ -261,7 +267,6 @@ def test_compare_scipy_unbounded_problem() -> None:
         constraints=constraints,
         objective=objective,
         target_func=LpFunc.MAXIMIZE,
-        compare_vars=False,
     )
 
 
@@ -293,7 +298,6 @@ def test_compare_scipy_fixed_demand_min_cost_flow() -> None:
 
         all variables >= 0
     """
-
     constraints = [
         ([1, 0, 0, 0, 0], 2, LpSign.LESS_OR_EQUAL),
         ([0, 1, 0, 0, 0], 2, LpSign.LESS_OR_EQUAL),
@@ -311,4 +315,5 @@ def test_compare_scipy_fixed_demand_min_cost_flow() -> None:
         constraints=constraints,
         objective=objective,
         target_func=LpFunc.MINIMIZE,
+        compare_vars=True,
     )
