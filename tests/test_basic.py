@@ -212,18 +212,15 @@ def test_fixed_demand_min_cost_flow_problem() -> None:
 
     solver = Solver(vars_cnt=5)
 
-    # Capacity constraints
-    solver.add_constraint([1, 0, 0, 0, 0], 2, LpSign.LESS_OR_EQUAL)  # f_sa <= 2
-    solver.add_constraint([0, 1, 0, 0, 0], 2, LpSign.LESS_OR_EQUAL)  # f_sb <= 2
-    solver.add_constraint([0, 0, 1, 0, 0], 2, LpSign.LESS_OR_EQUAL)  # f_at <= 2
-    solver.add_constraint([0, 0, 0, 1, 0], 2, LpSign.LESS_OR_EQUAL)  # f_bt <= 2
-    solver.add_constraint([0, 0, 0, 0, 1], 1, LpSign.LESS_OR_EQUAL)  # f_ab <= 1
+    solver.add_constraint([1, 0, 0, 0, 0], 2, LpSign.LESS_OR_EQUAL)  #f_sa <= 2
+    solver.add_constraint([0, 1, 0, 0, 0], 2, LpSign.LESS_OR_EQUAL)  #f_sb <= 2
+    solver.add_constraint([0, 0, 1, 0, 0], 2, LpSign.LESS_OR_EQUAL)  #f_at <= 2
+    solver.add_constraint([0, 0, 0, 1, 0], 2, LpSign.LESS_OR_EQUAL)  #f_bt <= 2
+    solver.add_constraint([0, 0, 0, 0, 1], 1, LpSign.LESS_OR_EQUAL)  #f_ab <= 1
 
-    # Flow conservation
-    solver.add_constraint([1, 0, -1, 0, -1], 0, LpSign.EQUAL)  # node a
-    solver.add_constraint([0, 1, 0, -1, 1], 0, LpSign.EQUAL)   # node b
+    solver.add_constraint([1, 0, -1, 0, -1], 0, LpSign.EQUAL)  #node a
+    solver.add_constraint([0, 1, 0, -1, 1], 0, LpSign.EQUAL)   #node b
 
-    # Source sends exactly 3 units
     solver.add_constraint([1, 1, 0, 0, 0], 3, LpSign.EQUAL)
 
     solver.set_objective([1, 3, 1, 1, 1], LpFunc.MINIMIZE)
