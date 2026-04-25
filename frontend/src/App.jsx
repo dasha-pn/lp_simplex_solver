@@ -34,7 +34,7 @@ export default function App() {
 
   const updateConstraintCoef = (rowIndex, colIndex, value) => {
     const newTask = structuredClone(editableTask);
-    newTask.constraints[rowIndex].coefs[colIndex] = Math.max(0, Number(value));
+    newTask.constraints[rowIndex].coefs[colIndex] = Number(value);
     setEditableTask(newTask);
     setResult(null);
   };
@@ -188,7 +188,6 @@ export default function App() {
                         <span>x{colIndex + 1}</span>
                         <input
                           type="number"
-                          min="0"
                           value={coef}
                           onChange={(e) =>
                             updateConstraintCoef(
