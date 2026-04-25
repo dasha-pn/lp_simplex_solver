@@ -1,2 +1,4 @@
 scipy>=1.10
 pulp>=2.7
+fastapi
+uvicorn
