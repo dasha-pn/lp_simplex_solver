@@ -77,7 +77,7 @@ def run_benchmark(benchmark_name, sizes, m_graphs, k_runs, solvers):
                 if not compare_results(base_res, other_res, eps=1e-7):
                     print(f"  [WARNING] Mismatch on N={n}! {base_name}: {base_res} | {other_name}: {other_res}")
                     
-        print(f"N={n} finished.")
+        print(f"N={n} finished")
     return results_time
 
 
