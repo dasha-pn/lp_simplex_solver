@@ -185,10 +185,18 @@ class Solver:
 
     def _run_simplex_loop(self, c: List[float], A: List[List[float]], b: List[float], B: List[int], N: List[int], max_iters: int, EPS: float):
         degenerate_iters = 0
+        m = len(B)
 
-        for _ in range(max_iters):
-            B_mat = self._get_columns(A, B)
-            B_inv = self._invert_matrix(B_mat)
+        B_mat = self._get_columns(A, B)
+        B_inv = self._invert_matrix(B_mat)
+
+        for iter_count in range(max_iters):
+            if iter_count > 0 and iter_count % 50 == 0:
+                B_mat = self._get_columns(A, B)
+                try:
+                    B_inv = self._invert_matrix(B_mat)
+                except ValueError:
+                    return LpStatus.INFEASIBLE, B, N
 
             c_B = [c[i] for i in B]
             y = self._vec_mat_mult(c_B, B_inv)
@@ -259,6 +267,20 @@ class Solver:
                 degenerate_iters += 1
             else:
                 degenerate_iters = 0
+
+            pivot_val = d[leaving_B_idx]
+            new_B_inv = [[0.0] * m for _ in range(m)]
+            
+            for col in range(m):
+                new_B_inv[leaving_B_idx][col] = B_inv[leaving_B_idx][col] / pivot_val
+                
+            for row in range(m):
+                if row != leaving_B_idx:
+                    factor = d[row]
+                    for col in range(m):
+                        new_B_inv[row][col] = B_inv[row][col] - factor * new_B_inv[leaving_B_idx][col]
+            
+            B_inv = new_B_inv
 
             B[leaving_B_idx], N[j_entering_N_idx] = N[j_entering_N_idx], B[leaving_B_idx]
 
