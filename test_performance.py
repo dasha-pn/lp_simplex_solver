@@ -82,11 +82,9 @@ def main():
         {"SciPy": solve_mfmc_scipy, "NetworkX": solve_mfmc_networkx}
     )
 
-    # Output CSVs
     save_to_csv("benchmark_small.csv", small_sizes, results_small)
     save_to_csv("benchmark_large.csv", large_sizes, results_large)
 
-    # Output Plots
     plot_results(small_sizes, results_small, "Custom vs SciPy (linear scale)\nAverage time per run")
     plot_results(small_sizes, results_small, "Custom vs SciPy (log scale)\nAverage time per run", is_log=True)
     

@@ -1,7 +1,7 @@
 from tests.correctness.test_basic import *
 from tests.correctness.test_compare_scipy import *
 
-if __name__ == "__main__":
+def main():
     test_compare_scipy_equality_minimization()
     test_compare_scipy_fixed_demand_min_cost_flow()
     test_compare_scipy_greater_or_equal_diet_problem()
@@ -18,3 +18,6 @@ if __name__ == "__main__":
     test_init_and_basic_maximization_production_planning()
 
     print("OK")
+
+if __name__ == "__main__":
+    main()
