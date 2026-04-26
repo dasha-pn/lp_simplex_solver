@@ -5,6 +5,7 @@ from tests.performance.graph_generator import generate_hard_mfmc_graph
 
 import time
 import csv
+import copy
 import matplotlib.pyplot as plt
 
 STYLES = {
@@ -13,25 +14,71 @@ STYLES = {
     "NetworkX": "g-^"
 }
 
-def benchmark_avg_time(solver_func, n, m_graphs, k_runs):
+def compare_results(res1, res2, eps=1e-7):
+    if res1 is None or res2 is None:
+        return res1 == res2
+    if isinstance(res1, (int, float)) and isinstance(res2, (int, float)):
+        return abs(res1 - res2) <= eps
+    if isinstance(res1, (tuple, list)) and isinstance(res2, (tuple, list)):
+        if len(res1) != len(res2):
+            return False
+        for a, b in zip(res1, res2):
+            if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+                if abs(a - b) > eps:
+                    return False
+            else:
+                if a != b:
+                    return False
+        return True
+    return res1 == res2
+
+def benchmark_avg_time(solver_func, graphs, k_runs):
     total_duration = 0.0
-    for _ in range(m_graphs):
-        graph = generate_hard_mfmc_graph(n, 3, 1000, 1000)
-        for _ in range(k_runs):
+    m_graphs = len(graphs)
+    graph_results = []
+
+    for original_graph in graphs:
+        first_run_result = None
+        for r in range(k_runs):
+            graph_copy = copy.deepcopy(original_graph)
+            
             start = time.perf_counter()
-            solver_func(graph)
+            res = solver_func(graph_copy)
             total_duration += time.perf_counter() - start
-    return total_duration / (m_graphs * k_runs)
+            
+            if r == 0:
+                first_run_result = res
+                
+        graph_results.append(first_run_result)
+        
+    return total_duration / (m_graphs * k_runs), graph_results
 
 
 def run_benchmark(benchmark_name, sizes, m_graphs, k_runs, solvers):
-    results = {name: [] for name in solvers.keys()}
+    results_time = {name: [] for name in solvers.keys()}
+    solver_names = list(solvers.keys())
+    
     print(benchmark_name)
     for n in sizes:
+        graphs = [generate_hard_mfmc_graph(n, 3, 1000, 1000) for _ in range(m_graphs)]
+        all_graph_results = {}
+        
         for name, func in solvers.items():
-            results[name].append(benchmark_avg_time(func, n, m_graphs, k_runs))
+            avg_time, graph_results = benchmark_avg_time(func, graphs, k_runs)
+            results_time[name].append(avg_time)
+            all_graph_results[name] = graph_results
+            
+        for i in range(m_graphs):
+            base_name = solver_names[0]
+            base_res = all_graph_results[base_name][i]
+            
+            for other_name in solver_names[1:]:
+                other_res = all_graph_results[other_name][i]
+                if not compare_results(base_res, other_res, eps=1e-7):
+                    print(f"  [WARNING] Mismatch on N={n}! {base_name}: {base_res} | {other_name}: {other_res}")
+                    
         print(f"N={n} finished.")
-    return results
+    return results_time
 
 
 def save_to_csv(filename, sizes, results):
@@ -92,7 +139,6 @@ def main():
     plot_results(large_sizes, results_large, "SciPy vs NetworkX (log scale)\nAverage time per run", is_log=True)
 
     plt.show()
-
 
 if __name__ == "__main__":
     main()
